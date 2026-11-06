@@ -1,0 +1,64 @@
+{
+  "benchmark": [
+    {
+      "workers": 1,
+      "mediana_ms": 5061.687,
+      "speedup": 1,
+      "eficiencia": 1
+    },
+    {
+      "workers": 2,
+      "mediana_ms": 2618.288,
+      "speedup": 1.9332048269709061,
+      "eficiencia": 0.9666024134854531
+    },
+    {
+      "workers": 4,
+      "mediana_ms": 1761.402,
+      "speedup": 2.8736693838203884,
+      "eficiencia": 0.7184173459550971
+    },
+    {
+      "workers": 8,
+      "mediana_ms": 1640.511,
+      "speedup": 3.0854331363825054,
+      "eficiencia": 0.3856791420478132
+    },
+    {
+      "workers": 12,
+      "mediana_ms": 2047.927,
+      "speedup": 2.4716149550252524,
+      "eficiencia": 0.20596791291877103
+    }
+  ],
+  "cpus": 12,
+  "ejecucion": {
+    "workers": 12,
+    "bloques": 71,
+    "duracion_ms": 1588.998,
+    "filas_por_segundo": 763926.6048256065
+  },
+  "limpieza": {
+    "leidas": 1213878,
+    "validas": 1160337,
+    "descartes": {
+      "coordenada_cero": 3035,
+      "coordenada_fuera_de_peru": 3025,
+      "coordenada_vacia_o_texto": 14965,
+      "duplicado": 11616,
+      "fallecidos_fuera_de_rango": 5888,
+      "fecha_invalida": 1936,
+      "hora_invalida": 13076
+    },
+    "correcciones": {
+      "clase_imputada": 6057,
+      "coordenadas_invertidas": 3001,
+      "departamento_imputado": 5846,
+      "fallecidos_imputado": 6041,
+      "fecha_reformateada": 3933,
+      "hora_reformateada": 4807,
+      "texto_normalizado": 24112
+    }
+  },
+  "so": "windows"
+}

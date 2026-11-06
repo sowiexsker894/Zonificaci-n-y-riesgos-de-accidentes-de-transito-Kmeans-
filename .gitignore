@@ -1,0 +1,5 @@
+data/siniestros_aug.csv
+data/siniestros_sucio.csv
+data/siniestros_limpio.csv
+bin/
+__pycache__/
