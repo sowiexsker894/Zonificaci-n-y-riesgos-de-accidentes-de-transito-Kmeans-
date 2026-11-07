@@ -367,6 +367,21 @@ Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
 - **Bug corregido 2:** la causa más frecuente era casi siempre "NO CUENTA CON CAUSA ESPECIFICA", que no informa nada. Se excluyeron los valores no informativos.
 - **Bug corregido 3:** el benchmark era inestable (ver 6.5).
 
+### 6.9 Gráficos para el informe (07/11/2026)
+- **Script:** `scripts/04_graficos.py` (matplotlib) → `docs/graficos/*.png` a 200 dpi, listos para insertar en Word.
+
+| Archivo | Sección del informe | Qué muestra |
+|---|---|---|
+| `mapa_zonas.png` | Resultados / impacto social | 8,791 siniestros reales (puntos grises) y las 15 zonas como burbujas con área proporcional a los fallecidos. Las 5 primeras tienen etiqueta con % de muertes y franja pico |
+| `curva_codo.png` | Diseño del modelo (elección de k) | SSE frente a k (5–60), la recta Kneedle y k = 15 marcado |
+| `curvas_speedup.png` | Paralelización / evidencias | Dos paneles: A = cargador y B = K-Means. Windows y WSL frente al ideal lineal, con el número de workers elegido marcado |
+
+**Decisiones de diseño:**
+- Las 15 zonas **no** se colorean con 15 colores distintos: no se distinguirían, sobre todo para personas daltónicas. La identidad la da el número de ranking y la magnitud el tamaño de la burbuja.
+- Paleta azul/naranja **validada para daltonismo y contraste** (ΔE CVD 24.7, contraste ≥ 3:1).
+- Las etiquetas van directamente sobre las líneas, además de la leyenda, para no depender solo del color.
+- Las dos curvas de aceleración van en **paneles separados con la misma escala en el eje y**, no en un gráfico de doble eje.
+
 ---
 
 ## 7. Incidencias técnicas
@@ -390,9 +405,10 @@ Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
 - [x] Parte A: cargador concurrente en Go.
 - [x] Parte B: K-Means paralelo en Go.
 - [x] Elegir k (codo → 15) y listar los puntos negros por zona y hora.
-- [ ] Gráficos para el informe: mapa de clusters (`kmeans_puntos_reales.csv`), curva del codo (`kmeans_codo.csv`) y curvas de speedup.
+- [x] Gráficos para el informe: mapa de zonas, curva del codo y curvas de speedup (`docs/graficos/`).
 - [ ] (Opcional) Segundo nivel de K-Means dentro de Lima Metropolitana para puntos negros a escala urbana.
 - [ ] Repetir los benchmarks con el portátil conectado a la corriente.
-- [ ] GitHub: commit de la Parte B, pull request y tablero Kanban.
+- [x] GitHub: commit de la Parte B (`5b28094`) y de los gráficos en `develop`.
+- [ ] GitHub: pull request `develop → main` y tablero Kanban (lo hace la usuaria).
 - [ ] Informe Word: `1ACC0065_PC3_202610_Informe_UXXXXXXXX`.
 - [x] Liberar espacio en el disco C:.
