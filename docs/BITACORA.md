@@ -233,7 +233,143 @@ Métricas completas: `data/metricas_loader.json` (Windows) y `data/metricas_load
 
 ---
 
-## 6. Incidencias técnicas
+## 6. Paso 5 — Parte B: K-Means paralelo en Go (07/11/2026) **[Informe: Diseño del modelo ML distribuido / Paralelización / Evidencias]**
+
+### Archivos
+| Archivo | Contenido |
+|---|---|
+| `internal/datos/datos.go` | Carga paralela del CSV limpio en formato columnar (un slice por columna) |
+| `internal/kmeans/kmeans.go` | K-Means paralelo (MapReduce), K-Means++ y método del codo (Kneedle) |
+| `internal/kmeans/kmeans_test.go` | Pruebas: recupera centros conocidos, **paralelo = secuencial**, codo |
+| `cmd/kmeans/main.go` | Ejecutable: codo, benchmark, entrenamiento final y perfil de cada zona |
+
+### Ejecución
+```bash
+go test ./...
+go run ./cmd/kmeans                          # elige k por el codo, entrena y perfila
+go run ./cmd/kmeans -k 20                    # k fijo
+go run ./cmd/kmeans -bench 1,2,4,8,12        # benchmark (30 iteraciones fijas, 5 repeticiones)
+GOOS=linux go build -o bin/kmeans-linux ./cmd/kmeans   # binario para WSL
+```
+
+**Salidas** (en `data/`):
+- `kmeans_codo.csv`: SSE por k.
+- `kmeans_clusters.json`: perfil de las 15 zonas.
+- `kmeans_puntos_reales.csv`: 8,791 siniestros reales con su cluster, para el mapa.
+- `metricas_kmeans.json` y `metricas_kmeans_wsl.json`.
+
+### 6.1 Diseño del modelo
+- **Variables del clustering:** latitud y longitud proyectadas a km con una proyección equirectangular. La latitud de referencia es la media del dataset; 1° de latitud = 110.574 km y 1° de longitud = 111.320 · cos(lat₀) km. Así la distancia euclidiana se mide en km reales.
+- **¿Por qué no se incluye la hora en el clustering?**
+  - Mezclaría escalas distintas (km frente a horas).
+  - La hora es cíclica: 23:00 está cerca de 00:00.
+  - Se clusteriza por **dónde** y luego se perfila cada zona por **cuándo** (hora pico y franja de 3 h). Así se responde la pregunta de impacto: zonas **y** horas.
+- **Inicialización: K-Means++** sobre una muestra aleatoria de 50,000 puntos (semilla 42). Es reproducible y evita que los centroides iniciales malos lleven a malos óptimos locales.
+- **Convergencia:** cuando ningún centroide se mueve más de 0.01 km (10 m), o al llegar a 100 iteraciones. **Con k = 15 converge en 13 iteraciones.**
+- **Cluster vacío:** conserva su centroide anterior.
+
+### 6.2 Paralelización (MapReduce con workers persistentes)
+```
+            ┌──────── centroides globales (solo lectura) ────────┐
+            ▼                        ▼                           ▼
+   [worker 1: partición 1]  [worker 2: partición 2]  ...  [worker N: partición N]
+    MAP: punto → centroide más cercano; acumula Σx, Σy, conteo, SSE
+            └───────────────► chan Parcial ◄─────────────────────┘
+                                     ▼
+          [master] REDUCE: suma parciales EN ORDEN FIJO (por id de worker)
+                   nuevos centroides = Σ / conteo → ¿convergió? → siguiente iteración
+```
+- **Particionado:** los 1,160,337 puntos se dividen en N rangos contiguos `[id·n/N, (id+1)·n/N)`. Cada worker es dueño de su partición durante todo el entrenamiento, igual que un nodo del clúster.
+- **Comunicación:** en cada iteración el master difunde los centroides a cada worker por su canal y recibe un `Parcial` por un canal común. **En la versión distribuida este mismo mensaje viajará por TCP**: la función `Asignar` es exactamente lo que ejecutará cada nodo.
+- **Sin condiciones de carrera:**
+  1. Cada worker escribe solo en su propio `Parcial` y en su rango del arreglo de asignaciones (rangos disjuntos).
+  2. Mientras los workers leen los centroides nadie los modifica. El master crea un slice **nuevo** para la siguiente iteración.
+  3. Solo el master actualiza los centroides (un solo escritor).
+  4. Ninguna estructura se comparte con escritura, así que no se necesita `sync.Mutex`.
+- **Determinismo:** el master reduce los parciales en orden de id de worker, no en orden de llegada. Así el resultado no depende de qué goroutine termina primero.
+- **Carga paralela del CSV:** `datos.Cargar` lee los 281 MB y los parte en N trozos alineados a `\n`. Cada goroutine parsea su trozo en un `Dataset` propio, que luego se concatena en orden. Tarda ~0.5 s en Windows. Se reutilizan los strings repetidos (departamentos, clases) para ahorrar memoria.
+
+### 6.3 Elección de k (método del codo)
+| k | 5 | 10 | **15** | 20 | 25 | 30 | 40 | 50 | 60 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| SSE (×10⁹ km²) | 29.9 | 11.6 | **7.03** | 4.59 | 3.40 | 2.28 | 1.68 | 1.22 | 1.01 |
+
+- Se probó k = 5…60 de 5 en 5. El método **Kneedle** (el punto más alejado de la recta entre los extremos de la curva normalizada) eligió **k = 15**.
+- De k = 5 a k = 15 (10 clusters más) el SSE baja **22,900 millones** de km². De k = 15 a k = 60 (45 clusters más) baja solo **6,000 millones**. A partir de 15, cada cluster adicional aporta mucho menos.
+- **Observación:** a escala nacional, k = 15 da **macrozonas regionales** con radio medio de 15 a 103 km. Para "puntos negros" a nivel de calles se recomienda un **segundo nivel**: volver a aplicar K-Means dentro de la zona 1 (Lima Metropolitana). Queda como mejora futura.
+
+### 6.4 Cantidad de goroutines en K-Means y su justificación
+**Decisión: 12 workers** (`runtime.NumCPU()`, flag `-workers`). Es distinta a la del cargador (8), y la diferencia es intencional:
+
+| | Cargador (Parte A) | K-Means (Parte B) |
+|---|---|---|
+| Tipo de trabajo | Parseo de texto: muchas asignaciones de memoria (GC), lectura de disco, shards y escritor que compiten por CPU | Cálculo puro: distancias y sumas sobre floats, sin asignaciones ni E/S en la fase MAP |
+| Óptimo medido | 8 | **12** |
+| Por qué | Pasar de 8 satura los hilos que necesitan el GC, los shards y el escritor | Cada hilo extra, aunque sea un E-core o hyper-threading, aporta cálculo útil; el master solo reduce 15 × N números por iteración |
+
+**Respuesta corta para el profesor:** *"En K-Means usamos los 12 hilos porque la fase MAP es cálculo puro, sin E/S ni memoria nueva, y el benchmark lo confirma: 12 workers fue el más rápido en Windows y en Linux. En el cargador usamos 8 porque ahí hay GC, shards y escritura que necesitan CPU libre. La cantidad de goroutines depende del tipo de carga, no es un número fijo."*
+
+### 6.5 Benchmark (k = 15, **30 iteraciones fijas**, mediana de 5 repeticiones, con calentamiento)
+| Workers | Windows (ms) | ms/iter | Speedup | Eficiencia | WSL Ubuntu (ms) | ms/iter | Speedup | Eficiencia |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1,744 | 58.1 | 1.00x | 100 % | 1,880 | 62.7 | 1.00x | 100 % |
+| 2 | 892 | 29.7 | 1.95x | 98 % | 1,000 | 33.3 | 1.88x | 94 % |
+| 4 | 613 | 20.4 | 2.84x | 71 % | 638 | 21.3 | 2.95x | 74 % |
+| 8 | 452 | 15.1 | 3.86x | 48 % | 646 | 21.5 | 2.91x | 36 % |
+| 12 | **436** | **14.5** | **4.00x** | 33 % | **449** | **15.0** | **4.19x** | 35 % |
+
+**Observaciones del benchmark:**
+1. **Primera versión del benchmark (descartada):** medía el entrenamiento hasta converger, unos 13 iteraciones y menos de 1 s. Los resultados eran inestables: 12 workers dio 3.9x en una corrida y **10x** en otra, lo cual no es creíble. **Causa:** el portátil estaba **funcionando con batería** (Windows reporta `BatteryStatus = 1`) y cambia la frecuencia de la CPU constantemente. En mediciones de milisegundos eso distorsiona todo.
+2. **Corrección:** benchmark con 30 iteraciones fijas (`Tol = -1`), para que cada configuración haga exactamente el mismo trabajo, con una corrida de calentamiento y la mediana de 5 repeticiones.
+3. **Recomendación para las evidencias del informe:** correr el benchmark **conectado a la corriente** y con el plan de energía en "Máximo rendimiento".
+4. La eficiencia baja de 2 a 12 workers por la **arquitectura híbrida** (los E-cores son más lentos que los P-cores y los hilos de hyper-threading comparten núcleo) y por el **límite de potencia** del i7-1265U (15 W).
+5. La partición estática (rangos iguales) hace que un worker en un E-core termine después que uno en un P-core, y el master espera al más lento en cada iteración. **Mejora posible:** partición dinámica con bloques más pequeños.
+
+### 6.6 Validación de la corrección
+- **Prueba unitaria:** con 2, 3, 8 y 16 workers se obtienen **exactamente** las mismas asignaciones, iteraciones y SSE que con 1 worker. La paralelización no altera el resultado.
+- **Prueba unitaria:** con 3 grupos sintéticos de centro conocido, los centroides encontrados quedan a menos de 0.1 km de los reales.
+- **Entre sistemas operativos:** Windows y WSL producen el mismo SSE (7.026 × 10⁹), las mismas 13 iteraciones y las mismas 15 zonas.
+
+### 6.7 Resultados: zonas de mayor riesgo **[Informe: Resultados / impacto social]**
+Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
+
+| # | Zona (moda depto / prov / distrito) | Centro (lat, lon) | Radio | Siniestros reales | Fallecidos reales | % nacional | Franja pico (3 h) | Clase | Causa principal* |
+|---:|---|---|---:|---:|---:|---:|---|---|---|
+| 1 | LIMA / LIMA / SAN MARTÍN DE PORRES | −11.959, −77.035 | 26 km | 1,931 | 2,072 | **19.9 %** | **05:00–07:59** | Atropello | Imprudencia del conductor |
+| 2 | LA LIBERTAD / VIRÚ / VIRÚ | −7.873, −78.631 | 64 km | 839 | 1,053 | 10.1 % | 18:00–20:59 | Despiste | Imprudencia del conductor |
+| 3 | CUSCO / ANTA / ANTA | −13.623, −72.137 | 76 km | 828 | 994 | 9.5 % | 17:00–19:59 | Despiste | Exceso de velocidad |
+| 4 | ICA / ICA / SALAS | −13.795, −75.227 | 103 km | 718 | 953 | 9.1 % | **04:00–06:59** | Despiste | Exceso de velocidad |
+| 5 | AREQUIPA / AREQUIPA / CERRO COLORADO | −16.417, −71.792 | 52 km | 670 | 846 | 8.1 % | 18:00–20:59 | Choque | Imprudencia del conductor |
+| 6 | PUNO / SAN ROMÁN / JULIACA | −14.812, −70.313 | 99 km | 584 | 706 | 6.6 % | 17:00–19:59 | Choque | Exceso de velocidad |
+| 7 | PIURA / PIURA / CASTILLA | −4.795, −80.546 | 71 km | 541 | 601 | 5.7 % | 19:00–21:59 | Choque | Exceso de velocidad |
+| 8 | JUNÍN / YAULI / LA OROYA | −11.753, −75.261 | 67 km | 448 | 593 | 5.7 % | 17:00–19:59 | Despiste | Imprudencia del conductor |
+| 9 | LA LIBERTAD / PACASMAYO / GUADALUPE | −6.864, −79.648 | 45 km | 492 | 551 | 5.3 % | 19:00–21:59 | Choque | Ebriedad y/o drogas |
+| 10 | PUNO / EL COLLAO / ILAVE | −16.730, −69.812 | 99 km | 485 | 547 | 5.2 % | 18:00–20:59 | Choque | Imprudencia del conductor |
+| 11 | ÁNCASH / CASMA / CASMA | −9.489, −77.811 | 81 km | 354 | 521 | 4.9 % | 18:00–20:59 | Despiste | Exceso de velocidad |
+| 12 | CAJAMARCA / JAÉN / JAÉN | −6.063, −78.798 | 62 km | 354 | 433 | 4.1 % | 17:00–19:59 | Despiste | Exceso de velocidad |
+| 13 | SAN MARTÍN / RIOJA / NUEVA CAJAMARCA | −6.139, −77.084 | 44 km | 285 | 317 | 3.0 % | 18:00–20:59 | Choque | Imprudencia del conductor |
+| 14 | UCAYALI / CORONEL PORTILLO / YARINACOCHA | −9.573, −75.851 | 97 km | 199 | 240 | 2.3 % | 19:00–21:59 | Choque | Exceso de velocidad |
+| 15 | LORETO / MAYNAS / SAN JUAN BAUTISTA | −3.841, −73.312 | 15 km | 63 | 65 | 0.6 % | 18:00–20:59 | Choque | Ebriedad y/o drogas |
+
+\* Moda calculada **excluyendo** "NO CUENTA CON CAUSA ESPECIFICA" y "EN PROCESO DE INVESTIGACIÓN".
+
+**Hallazgos (respuesta a la pregunta de impacto):**
+1. **Lima Metropolitana concentra casi 1 de cada 5 muertes** (19.9 %). Su franja pico es **05:00–07:59**, la hora de salida al trabajo, y la clase principal es el **atropello**. → Patrullaje y control peatonal al amanecer.
+2. **En 13 de las 15 zonas la franja pico está entre las 17:00 y las 21:59**: atardecer, poca luz, regreso a casa. → Es la franja prioritaria para patrullaje en las regiones.
+3. **Ica tiene su pico de madrugada (04:00–06:59)** con despistes en la Panamericana Sur. *Hipótesis por validar:* fatiga o sueño de conductores de transporte interprovincial.
+4. Las 5 primeras zonas (Lima, La Libertad, Cusco, Ica, Arequipa) suman el **56.7 %** de las muertes. → Ahí deberían ubicarse primero las ambulancias y las bases de fiscalización.
+5. **Exceso de velocidad** es la causa identificada más frecuente en 7 zonas, sobre todo en la sierra (Cusco, Puno, Cajamarca) y en las carreteras de la costa (Ica, Piura, Casma).
+
+### 6.8 Observaciones de la Parte B
+- **Calidad de la causa:** el **50.6 %** de los siniestros reales tiene la causa "EN PROCESO DE INVESTIGACIÓN", lo que limita el análisis de causas. Es una limitación de la fuente (data preliminar 2024–2025).
+- **Siniestros reales que llegaron al mapa:** 8,791 de 9,105 (96.6 %). Los 314 restantes recibieron errores irrecuperables durante el ensuciado intencional (paso 3) y se descartaron en la limpieza.
+- **Bug corregido 1:** la zona se calculaba con la moda de departamento, provincia y distrito **por separado**, lo que daba combinaciones imposibles como "PUNO / TACNA / ILAVE". Se cambió a la moda de la tripleta completa.
+- **Bug corregido 2:** la causa más frecuente era casi siempre "NO CUENTA CON CAUSA ESPECIFICA", que no informa nada. Se excluyeron los valores no informativos.
+- **Bug corregido 3:** el benchmark era inestable (ver 6.5).
+
+---
+
+## 7. Incidencias técnicas
 | Fecha | Incidencia | Solución |
 |---|---|---|
 | 06/11 | GitHub no acepta archivos > 100 MB y los CSV pesan ~290 MB | `.gitignore` para los CSV grandes y `bin/`. Los CSV se regeneran con los scripts (semillas fijas) |
@@ -241,13 +377,22 @@ Métricas completas: `data/metricas_loader.json` (Windows) y `data/metricas_load
 | 06/11 | El CSV generado en Windows podía terminar líneas en `\r\n` | El cargador elimina `\r` al final de cada línea y maneja el encabezado con CRLF |
 | 06/11 | **Disco C: lleno (10 MB libres de 465 GB)**: falló la compilación | Se borró `siniestros_aug.csv`, que es intermedio y se regenera con el script 02. **Pendiente: liberar espacio en el disco** |
 | 06/11 | No se pudo correr `go test -race` | En Windows requiere CGO y gcc. Queda pendiente (opcional) instalar gcc en WSL para correrlo |
+| 06/11 | Se liberó espacio en el disco: de 0.01 GB a **70 GB libres** | La usuaria vació Descargas |
+| 06/11 | Primer commit en la rama `develop` (`f06da81`) y push a GitHub | Pull request `develop → main` a cargo de la usuaria |
+| 07/11 | Las pruebas de Go "se colgaron" más de 2 minutos | No era un bloqueo del código: el equipo se suspendió o bloqueó (`LogonUI.exe` activo). Al volver a correr, las pruebas pasaron en 1.6 s |
+| 07/11 | Benchmark inestable por funcionar con batería | Benchmark con 30 iteraciones fijas, calentamiento y mediana de 5 (ver 6.5) |
+| 07/11 | El `/tmp` de WSL se borró entre ejecuciones porque la instancia se apagó | Guardar los resultados de WSL directamente en `/mnt/c/...` |
+| 07/11 | El cargador y K-Means tienen óptimos de workers distintos (8 y 12) | Documentado como hallazgo (6.4), no es un error |
 
 ---
 
-## 7. Pendientes
-- [ ] Parte B: K-Means paralelo en Go sobre `data/siniestros_limpio.csv` (lat, lon, hora).
-- [ ] Elegir k (método del codo) y listar los puntos negros por zona y hora.
-- [ ] Gráficos: clusters en el mapa y curva de speedup.
-- [ ] GitHub: rama `develop` y ramas `feature/*` (Git Flow), commits y tablero Kanban.
+## 8. Pendientes
+- [x] Parte A: cargador concurrente en Go.
+- [x] Parte B: K-Means paralelo en Go.
+- [x] Elegir k (codo → 15) y listar los puntos negros por zona y hora.
+- [ ] Gráficos para el informe: mapa de clusters (`kmeans_puntos_reales.csv`), curva del codo (`kmeans_codo.csv`) y curvas de speedup.
+- [ ] (Opcional) Segundo nivel de K-Means dentro de Lima Metropolitana para puntos negros a escala urbana.
+- [ ] Repetir los benchmarks con el portátil conectado a la corriente.
+- [ ] GitHub: commit de la Parte B, pull request y tablero Kanban.
 - [ ] Informe Word: `1ACC0065_PC3_202610_Informe_UXXXXXXXX`.
-- [ ] Liberar espacio en el disco C:.
+- [x] Liberar espacio en el disco C:.
