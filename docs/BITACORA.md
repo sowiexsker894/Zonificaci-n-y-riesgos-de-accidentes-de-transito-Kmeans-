@@ -384,6 +384,24 @@ Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
 
 ---
 
+## 6.10 Informe Word (07/11/2026)
+- **Archivo:** `docs/1ACC0065_PC3_202610_Informe_UXXXXXXXX.docx` (19 páginas, A4, Times New Roman, mismo estilo que el borrador).
+- **Base:** borrador de Ximena (`docs/PC3 progra.docx`), que se conservó sin cambios. Del borrador se mantuvieron la carátula, la descripción del problema, la motivación, la pregunta de impacto y la bibliografía. El resto se redactó a partir de esta bitácora.
+- **Estructura exigida:** carátula, resumen, índice, descripción y motivación, objetivos, desarrollo, conclusiones, recomendaciones, bibliografía (APA 7) y anexos (enlaces, Kanban, reporte de participación y bitácora).
+- **Correcciones al borrador** para que coincida con lo implementado:
+
+  | El borrador decía | Lo implementado |
+  |---|---|
+  | Dataset "PERSONAS INVOLUCRADAS EN SINIESTROS…" | "BBDD ONSV – SINIESTROS FATALES 2021-2025 (preliminar)" |
+  | Augmentation con SDV GaussianCopulaSynthesizer | Inyección de ruido gaussiano (*jittering*) |
+  | Normalización Z-Score de latitud y longitud | Proyección equirectangular a km (Z-Score deformaría las distancias) |
+  | Clima, tipo de vía y zonificación con One-Hot dentro del modelo | Solo latitud y longitud en el clustering; las demás variables sirven para perfilar las zonas |
+  | "impide procesar más de 1.2 millones de registros históricos" | La data real tiene 9,105 registros; el volumen de 1.2 M es aumentado |
+
+- **Verificación:** se abrió con Microsoft Word (por COM) para rellenar el índice, se exportó a PDF y se revisaron las páginas visualmente.
+
+---
+
 ## 7. Incidencias técnicas
 | Fecha | Incidencia | Solución |
 |---|---|---|
@@ -410,5 +428,6 @@ Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
 - [ ] Repetir los benchmarks con el portátil conectado a la corriente.
 - [x] GitHub: commit de la Parte B (`5b28094`) y de los gráficos en `develop`.
 - [ ] GitHub: pull request `develop → main` y tablero Kanban (lo hace la usuaria).
-- [ ] Informe Word: `1ACC0065_PC3_202610_Informe_UXXXXXXXX`.
+- [x] Informe Word redactado (`docs/1ACC0065_PC3_202610_Informe_UXXXXXXXX.docx`).
+- [ ] Informe: poner el código de alumno en el nombre del archivo, el enlace del video, la captura del Kanban y confirmar el reporte de participación.
 - [x] Liberar espacio en el disco C:.
