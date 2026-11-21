@@ -496,3 +496,9 @@ Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
 - `go test -race ./internal/...` se ejecutó en un contenedor Linux (`golang:1.26`) y pasó en api, kmeans y limpieza. Queda pendiente repetir los benchmarks con el portátil conectado a la corriente.
 - `docs/GUIA_DEMO.md` ahora incluye cómo acceder desde otra computadora y cómo tomar las capturas de Postgres.
 - **Pendiente (usuaria):** pegar las 9 capturas en la sección 3.10.3, poner el código de alumno y el enlace del video, captura del Kanban (Anexo B), commit y push, y confirmar el reporte de participación (Anexo C, redactado por Claude: confirmar quién hizo qué en la PC4).
+
+### 10.2 Presentación PC4 (21/11/2026)
+- Se generó `docs/PC4_Presentacion.pptx` (20 diapositivas, 16:9) con `scripts/06_ppt_pc4.py`. Diseño tomado de `docs/canvamodeloplantilla.pdf` (Poppins, azul `#418CFF`, fondo `#FAFAFA`, ilustraciones de línea recortadas de la plantilla). Contenido tomado del informe PC4 (`docs/1ACC0065_PC4_202610_Informe_U20221a963.docx`, con las capturas ya pegadas) y del PDF de la presentación de la PC3.
+- Estructura: 3 diapositivas de recordatorio de la PC3, 13 de la PC4 (arquitectura, topología en estrella y su justificación, nodo y coordinador en Go, entrenamiento distribuido, API, latencia, PostgreSQL, Redis, pruebas, demo), mejora continua, conclusiones, limitaciones y cierre. Cada diapositiva trae notas del orador.
+- Se descargó la tipografía en `docs/fuentes/Poppins/` (hay que instalarla en el equipo que expone). Las imágenes usadas están en `docs/ppt_assets/`.
+- Se usaron las cifras corregidas de la mejora continua (k de 5 a 60, no de 2 a 30; cifras de impacto no solo con registros reales).
