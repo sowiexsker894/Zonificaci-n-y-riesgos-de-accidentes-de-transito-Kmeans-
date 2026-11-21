@@ -1,0 +1,635 @@
+{
+  "info": {
+    "name": "PC4 - API Siniestros K-Means",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "sin_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Health (API, Postgres, Redis, nodos)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/health",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));",
+              "pm.test('3 nodos activos', ()=>pm.expect(pm.response.json().nodos_activos).to.eql(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Login (JWT)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/login",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"usuario\": \"admin\",\n  \"clave\": \"admin123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Login inválido (401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/login",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"usuario\": \"admin\",\n  \"clave\": \"mala\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 401', ()=>pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Listar zonas (Redis: ver X-Cache)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/zonas",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "zonas"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Detalle zona 1",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/zonas/1",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "zonas",
+            "1"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Zona inexistente (404)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/zonas/99",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "zonas",
+            "99"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 404', ()=>pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Predict - Lima 18h",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/predict",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "predict"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": -12.0464,\n  \"lon\": -77.0428,\n  \"hora\": 18\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));",
+              "pm.test('tiene nivel', ()=>pm.expect(pm.response.json()).to.have.property('nivel'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Predict - Cusco 07h",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/predict",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "predict"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": -13.5319,\n  \"lon\": -71.9675,\n  \"hora\": 7\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Predict - fuera de Perú (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/predict",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "predict"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 40.4,\n  \"lon\": -3.7,\n  \"hora\": 10\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 400', ()=>pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Listar siniestros LIMA",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/siniestros?departamento=LIMA&limit=5",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "siniestros"
+          ],
+          "query": [
+            {
+              "key": "departamento",
+              "value": "LIMA"
+            },
+            {
+              "key": "limit",
+              "value": "5"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Crear siniestro sin token (401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/siniestros",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "siniestros"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": -12.07,\n  \"lon\": -77.05,\n  \"hora\": 19\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 401', ()=>pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Crear siniestro (JWT)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/siniestros",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "siniestros"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": -12.07,\n  \"lon\": -77.05,\n  \"hora\": 19,\n  \"fallecidos\": 1,\n  \"departamento\": \"LIMA\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 201', ()=>pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('sin_id', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Eliminar siniestro creado (JWT)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/siniestros/{{sin_id}}",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "siniestros",
+            "{{sin_id}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Entrenar K-Means distribuido en 3 nodos (JWT)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/entrenar",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "entrenar"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"k\": 15,\n  \"max_iter\": 50\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Entrenamiento distribuido < 2000 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(2000));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Historial de entrenamientos (JWT)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/entrenamientos",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "entrenamientos"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Métricas del clúster (JWT)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base}}/api/admin/metricas",
+          "host": [
+            "{{base}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "metricas"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Latencia < 100 ms', ()=>pm.expect(pm.response.responseTime).to.be.below(100));",
+              "pm.test('Status 200', ()=>pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

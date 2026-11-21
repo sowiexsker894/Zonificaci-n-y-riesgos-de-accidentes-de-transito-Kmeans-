@@ -449,3 +449,50 @@ Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
   - Al recalcular con los 8,791 reales: Lima 19.75 % (frente a 19.86 %), las 5 primeras zonas 56.4 % (frente a 56.7 %), y 13 de las 15 franjas pico iguales.
   - Cambian Puno (de 17 h a 18 h) y Cajamarca (de 17:00–19:59 a 04:00–06:59).
   - **Pendiente en el informe:** ajustar la frase de la sección 3.2 que dice que las cifras de impacto se reportan sobre los registros reales.
+
+---
+
+## 10. PC4 — API, clúster distribuido y bases de datos (21/11/2026)
+
+**Decisiones**
+- **Docker** para el clúster (la evidencia de "cluster de nodos" se levanta con un comando) y **PostgreSQL + Redis** (persistente + caché) en lugar de MongoDB, por decisión del equipo.
+- Topología **estrella**: la API es el coordinador y habla por **TCP (gob)** con 3 nodos ML. Cada nodo es dueño de una partición de los 8 791 puntos reales (2 930 / 2 930 / 2 931).
+- JWT HS256 implementado con la biblioteca estándar; WebSocket con `gorilla/websocket`; Swagger = `openapi.yaml` embebido + Swagger UI.
+
+**Qué se construyó**
+| Pieza | Archivo |
+|---|---|
+| Protocolo TCP y K-Means distribuido (MAP en nodos, REDUCE en la API) | `internal/red/red.go` |
+| Nodo de cómputo | `cmd/nodo/main.go` |
+| API (rutas, JWT, caché Redis, CRUD, entrenamiento, métricas, WS) | `internal/api/*.go`, `cmd/api/main.go` |
+| Esquema Postgres + siembra (zonas, 8 791 siniestros, usuarios) | `internal/api/store.go` |
+| Orquestación (6 contenedores) | `Dockerfile`, `docker-compose.yml` |
+| Colección Postman con pruebas de latencia | `docs/postman/` |
+| Medición de latencia | `scripts/latencia.sh` |
+| Guía de exposición | `docs/GUIA_DEMO.md` |
+
+**Resultados medidos**
+- `POST /api/predict`: cálculo en servidor ≈ 0.17 ms; 500 peticiones completas (con curl): p50 5.6 ms, p95 24 ms, p99 27 ms → **cumple < 100 ms**.
+- Entrenamiento distribuido k=15 sobre 3 nodos: converge en 17 iteraciones, ≈ 15 ms.
+- Caché: `GET /api/zonas` pasa de `X-Cache: MISS` a `HIT`.
+- Pruebas: JWT (válido, firma errónea, expirado) en `internal/api/auth_test.go`.
+- Tolerancia: con un nodo detenido, `/health` marca 2/3 activos y `/api/entrenar` responde 503 (no devuelve resultados parciales).
+
+**Incidencias**
+| Fecha | Problema | Solución |
+|---|---|---|
+| 21/11 | Docker Desktop apagado (`dockerDesktopLinuxEngine` no encontrado) | Se abrió Docker Desktop |
+| 21/11 | `go mod download` falló en la imagen: `go.mod` exige Go 1.26 | Imagen base `golang:1.26-alpine` |
+
+**Mejora continua (PC3)**
+- [ ] Corregir en el informe la frase de 3.2 (cifras de impacto: no son solo de registros reales).
+- [ ] Repetir los benchmarks con el portátil conectado a la corriente.
+
+**Pendientes PC4:** informe Word (distribución, API, BD, evidencias, documentación), capturas de Postman/Swagger/Postgres, commit + PR a `main`, Kanban, reporte de participación. Frontend SPA (Parte D) queda fuera del alcance de la PC4.
+
+### 10.1 Informe PC4 y verificaciones (21/11/2026)
+- Se generó `docs/1ACC0065_PC4_202610_Informe_UXXXXXXXX.docx` con `scripts/05_informe_pc4.py`: parte del informe de la PC3 y agrega las secciones 3.7 (distribución y topología en estrella), 3.8 (API, Swagger, latencia), 3.9 (PostgreSQL y Redis), 3.10 (evidencias, con marcadores de captura) y 3.11 (mejoras continuas), además de conclusiones, recomendaciones y el reporte de participación actualizados. El diagrama de la topología quedó en `docs/graficos/topologia_cluster.png`.
+- **Mejora continua aplicada:** se corrigió en la sección 3.2.5 y en la nota de la Tabla 12 la afirmación de que las cifras de impacto usan solo registros reales.
+- `go test -race ./internal/...` se ejecutó en un contenedor Linux (`golang:1.26`) y pasó en api, kmeans y limpieza. Queda pendiente repetir los benchmarks con el portátil conectado a la corriente.
+- `docs/GUIA_DEMO.md` ahora incluye cómo acceder desde otra computadora y cómo tomar las capturas de Postgres.
+- **Pendiente (usuaria):** pegar las 9 capturas en la sección 3.10.3, poner el código de alumno y el enlace del video, captura del Kanban (Anexo B), commit y push, y confirmar el reporte de participación (Anexo C, redactado por Claude: confirmar quién hizo qué en la PC4).

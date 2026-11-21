@@ -1,0 +1,40 @@
+# Clúster PC4: 3 nodos ML (TCP) + API coordinadora + PostgreSQL + Redis.
+# Topología: estrella (coordinador al centro, nodos como hojas) en la red "cluster".
+x-nodo: &nodo
+  build: .
+  command: ["/app/nodo"]
+  networks: [cluster]
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: siniestros, POSTGRES_PASSWORD: siniestros, POSTGRES_DB: siniestros}
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [cluster]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U siniestros"], interval: 3s, retries: 20}
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    networks: [cluster]
+  nodo1: {<<: *nodo, environment: {NODO_ID: "0", NODO_TOTAL: "3", NODO_PORT: "9000"}}
+  nodo2: {<<: *nodo, environment: {NODO_ID: "1", NODO_TOTAL: "3", NODO_PORT: "9000"}}
+  nodo3: {<<: *nodo, environment: {NODO_ID: "2", NODO_TOTAL: "3", NODO_PORT: "9000"}}
+  api:
+    build: .
+    command: ["/app/api"]
+    ports: ["8080:8080"]
+    environment:
+      DATABASE_URL: postgres://siniestros:siniestros@postgres:5432/siniestros?sslmode=disable
+      REDIS_ADDR: redis:6379
+      NODOS: nodo1:9000,nodo2:9000,nodo3:9000
+      JWT_SECRET: secreto-pc4-cc235
+      DATA_DIR: /app/data
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_started}
+    networks: [cluster]
+    restart: unless-stopped
+networks: {cluster: {}}
+volumes: {pgdata: {}}
