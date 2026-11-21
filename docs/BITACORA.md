@@ -431,3 +431,21 @@ Ranking por fallecidos. Las cifras "reales" cuentan solo `es_sintetico = 0`.
 - [x] Informe Word redactado (`docs/1ACC0065_PC3_202610_Informe_UXXXXXXXX.docx`).
 - [ ] Informe: poner el código de alumno en el nombre del archivo, el enlace del video, la captura del Kanban y confirmar el reporte de participación.
 - [x] Liberar espacio en el disco C:.
+
+## 9. Presentación de la PC3 (07/11/2026)
+
+- Se armó la presentación formal de 18 diapositivas (portada, problema, pregunta, objetivos, dataset ONSV, arquitectura, augmentation, ensuciado/limpieza, cargador, K-Means MapReduce, codo, rendimiento/goroutines, mapa de zonas, hallazgos, validación, conclusiones, limitaciones/siguientes pasos, cierre) con notas del orador en cada una.
+- Usa los gráficos de `docs/graficos/` (mapa_zonas, curva_codo, curvas_speedup) y solo cifras ya registradas en esta bitácora.
+- Se redactó un guion de 5 minutos repartido entre Nicole y Ximena. La presentación no se versiona en el repositorio.
+
+### 9.1 Guion de defensa y correcciones a la presentación (07/11/2026)
+- Se creó `docs/GUION_DEFENSA.md`. Para cada diapositiva incluye el guion, la teoría que la respalda y las respuestas a posibles preguntas del profesor. También resume el informe sección por sección.
+- **Correcciones en la presentación** (detectadas al compararla con los datos):
+  - Diapositiva 11: decía "k de 2 a 30"; lo ejecutado fue **k = 5 a 60, de 5 en 5** (`data/kmeans_codo.csv`).
+  - Diapositiva 13: las horas pico de La Libertad, Cusco y Arequipa estaban generalizadas como 17:00–21:59. Se pusieron las franjas exactas.
+  - Diapositiva 12: el pie decía "mediana de 5" para todo; el cargador usó la mediana de 3.
+  - Diapositivas 7 y 14: decían que las cifras de impacto se calcularon "solo con datos reales".
+- **Hallazgo:** en `cmd/kmeans/main.go`, el % de fallecidos, la franja pico, la clase y la causa se calculan sobre los **1.16 M registros**. Solo los conteos "reales" filtran `es_sintetico = 0`.
+  - Al recalcular con los 8,791 reales: Lima 19.75 % (frente a 19.86 %), las 5 primeras zonas 56.4 % (frente a 56.7 %), y 13 de las 15 franjas pico iguales.
+  - Cambian Puno (de 17 h a 18 h) y Cajamarca (de 17:00–19:59 a 04:00–06:59).
+  - **Pendiente en el informe:** ajustar la frase de la sección 3.2 que dice que las cifras de impacto se reportan sobre los registros reales.
