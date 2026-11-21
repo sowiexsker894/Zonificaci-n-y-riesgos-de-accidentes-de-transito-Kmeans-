@@ -1,0 +1,6 @@
+bin/
+__pycache__/
+.git/
+data/siniestros_*.csv
+*.docx
+*.xlsx

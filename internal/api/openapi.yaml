@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: API de Zonificación y Riesgo de Accidentes de Tránsito (K-Means)
+  version: 1.0.0
+  description: Coordinador del clúster de nodos ML. Datos ONSV 2021-2025. Latencia objetivo < 100 ms.
+servers: [{url: /}]
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, bearerFormat: JWT}
+security: []
+paths:
+  /health:
+    get: {summary: Estado de API, Postgres, Redis y nodos, tags: [Sistema], responses: {'200': {description: OK}}}
+  /api/login:
+    post:
+      summary: Obtiene un JWT (usuario de prueba admin / admin123)
+      tags: [Auth]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {usuario: {type: string, example: admin}, clave: {type: string, example: admin123}}}}}}
+      responses: {'200': {description: Token JWT}, '401': {description: Credenciales inválidas}}
+  /api/zonas:
+    get: {summary: Lista las zonas de riesgo (15 clústeres). Cacheada en Redis (X-Cache), tags: [Zonas], responses: {'200': {description: Lista}}}
+  /api/zonas/{ranking}:
+    get:
+      summary: Detalle de una zona por ranking (1 = más crítica)
+      tags: [Zonas]
+      parameters: [{name: ranking, in: path, required: true, schema: {type: integer, example: 1}}]
+      responses: {'200': {description: Zona}, '404': {description: No existe}}
+  /api/predict:
+    post:
+      summary: Zona de riesgo más cercana y nivel de riesgo para una ubicación y hora
+      tags: [Predicción]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [lat, lon], properties: {lat: {type: number, example: -12.0464}, lon: {type: number, example: -77.0428}, hora: {type: integer, example: 18}}}}}}
+      responses: {'200': {description: Predicción}, '400': {description: Datos inválidos}}
+  /api/siniestros:
+    get:
+      summary: Lista siniestros (muestra real de Postgres)
+      tags: [Siniestros]
+      parameters:
+        - {name: departamento, in: query, schema: {type: string, example: LIMA}}
+        - {name: limit, in: query, schema: {type: integer, example: 5}}
+      responses: {'200': {description: Lista}}
+    post:
+      summary: Registra un siniestro nuevo (requiere JWT). Invalida la caché.
+      tags: [Siniestros]
+      security: [{bearer: []}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [lat, lon, hora], properties: {lat: {type: number, example: -12.07}, lon: {type: number, example: -77.05}, hora: {type: integer, example: 19}, fallecidos: {type: integer, example: 1}, departamento: {type: string, example: LIMA}}}}}}
+      responses: {'201': {description: Creado}, '401': {description: Sin token}}
+  /api/siniestros/{id}:
+    delete:
+      summary: Elimina un siniestro (requiere JWT)
+      tags: [Siniestros]
+      security: [{bearer: []}]
+      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      responses: {'200': {description: Eliminado}, '404': {description: No existe}}
+  /api/entrenar:
+    post:
+      summary: Reentrena K-Means distribuido en los nodos por TCP (requiere JWT)
+      tags: [Clúster ML]
+      security: [{bearer: []}]
+      requestBody: {content: {application/json: {schema: {type: object, properties: {k: {type: integer, example: 15}, max_iter: {type: integer, example: 50}}}}}}
+      responses: {'200': {description: Resultado del entrenamiento}, '503': {description: Nodos caídos}}
+  /api/entrenamientos:
+    get: {summary: Historial de entrenamientos guardados en Postgres, tags: [Clúster ML], security: [{bearer: []}], responses: {'200': {description: Lista}}}
+  /api/admin/metricas:
+    get: {summary: Métricas del clúster (CPU/goroutines, latencias p50/p95, nodos), tags: [Admin], security: [{bearer: []}], responses: {'200': {description: Métricas}}}
+  /ws/metricas:
+    get: {summary: "WebSocket: empuja las métricas cada segundo (?token=JWT)", tags: [Admin], responses: {'101': {description: Switching Protocols}}}
