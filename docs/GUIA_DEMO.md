@@ -75,3 +75,25 @@ Muestra uptime, peticiones, goroutines, memoria, p50/p95 por ruta y estado de no
 | `/health` con nodo `activo:false` | `docker compose start nodoN` |
 | Puerto 8080/5432/6379 ocupado | Cerrar el programa que lo usa o cambiar el puerto en `docker-compose.yml` |
 | Reiniciar datos desde cero | `docker compose down -v && docker compose up -d --build` |
+
+---
+
+## Para tu compañera: acceder al clúster desde otra computadora
+
+**Opción A (recomendada): levantar su propia copia.** Todo el entorno está en el repositorio, así que le basta con:
+1. Instalar **Docker Desktop** y abrirlo hasta que diga *Running*.
+2. `git clone <URL del repositorio>` y `git checkout develop` (o `main` cuando se haga el PR).
+3. Dentro de la carpeta: `docker compose up -d --build` (la primera vez tarda unos minutos).
+4. Listo: usa `http://localhost:8080` en lugar de la IP de otra máquina. Postman, Swagger y Postgres funcionan igual que en esta guía.
+
+**Opción B: usar el clúster que corre en tu computadora (misma red Wi-Fi).**
+1. En tu PC: `ipconfig` y anota la dirección IPv4 (por ejemplo `192.168.1.25`).
+2. Permitir el puerto en el firewall (PowerShell como administrador): `New-NetFirewallRule -DisplayName "API PC4" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow`.
+3. Ella usa `http://192.168.1.25:8080` en Postman y en el navegador (`/swagger`). En la colección de Postman basta cambiar la variable `base`.
+4. Para Postgres desde su equipo habría que abrir también el puerto 5432; es más simple que lo vea con la opción A.
+
+**Capturas de Postgres.** Dos formas:
+- Terminal: `docker compose exec postgres psql -U siniestros -c "SELECT count(*) FROM siniestros;" -c "SELECT id,k,iteraciones,duracion_ms FROM entrenamientos;" -c "SELECT * FROM zonas LIMIT 3;"`
+- Interfaz gráfica (DBeaver o pgAdmin): servidor `localhost`, puerto `5432`, base `siniestros`, usuario `siniestros`, clave `siniestros`.
+
+**Antes de las capturas, generar datos:** correr una vez `POST /api/entrenar` y 5–10 `POST /api/predict`, para que las tablas `entrenamientos` y `consultas` tengan filas. Capturas a tomar (en el informe, sección 3.10.3, están los marcadores en este orden): `docker compose ps`, Swagger, login con token, predict con el tiempo, Run collection, zonas con `X-Cache` MISS y HIT, entrenar con 3 nodos, `/health`, consultas en Postgres.
